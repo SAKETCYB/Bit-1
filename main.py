@@ -1,77 +1,41 @@
-import os
-import uuid
-from flask import Flask, send_file, abort
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from telegram import Update
-from telegram.constants import ParseMode
-import asyncio
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import openai
+import os
 
-TOKEN = "8281942189:AAGpg2C1w_Jviv2i5ADLABlvQGVcXtBVaxs"
-ADMIN_ID = 8296875526
+TELEGRAM_TOKEN = os.getenv("8253057579:AAFTNBYYNq6vIwYw0n_VTY7E3SaR_zAHCQc")
+OPENAI_API_KEY = os.getenv("sk-abcd5678efgh1234abcd5678efgh1234abcd5678")
 
-app = Flask(__name__)
-FILES = {}
+openai.api_key = OPENAI_API_KEY
 
-@app.route("/")
-def home():
-    return "Uploader Bot is Running!"
-
-@app.route("/d/<file_id>")
-def download(file_id):
-    if file_id not in FILES:
-        return abort(404)
-
-    filepath = FILES[file_id]
-    try:
-        resp = send_file(filepath, as_attachment=True)
-    except:
-        return abort(404)
-
-    os.remove(filepath)
-    del FILES[file_id]
-    return resp
-
-
-async def start(update: Update, context):
-    await update.message.reply_text("سلام! فایل کانفیگت رو بفرست تا لینک یک‌بار مصرف بسازم.")
-
-async def handle_file(update: Update, context):
-    if update.message.from_user.id != ADMIN_ID:
-        return await update.message.reply_text("❌ فقط ادمین اجازه آپلود دارد")
-
-    file = update.message.document
-    if not file:
-        return await update.message.reply_text("فقط فایل بفرست.")
-
-    file_id = str(uuid.uuid4())
-    new_path = f"file_{file_id}.txt"
-
-    file_obj = await file.get_file()
-    await file_obj.download_to_drive(new_path)
-
-    FILES[file_id] = new_path
-
-    link = f"https://{os.environ.get('RENDER_EXTERNAL_URL').replace('https://','')}/d/{file_id}"
-
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        f"✅ **لینک یک‌بار مصرف ساخته شد:**\n\n{link}\n\nبعد از اولین دانلود حذف میشود.",
-        parse_mode=ParseMode.MARKDOWN
+        "سلام 😎\nمن اصغرم!\nفارسی یا English، هرچی دوست داری بپرس 😉"
     )
 
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
 
-async def main():
-    tg = ApplicationBuilder().token(TOKEN).build()
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "تو یک ربات تلگرامی به نام اصغر هستی. "
+                    "خیلی خودمونی، باحال، فارسی و انگلیسی رو قاطی جواب بده. "
+                    "جواب‌ها کوتاه و صمیمی باشن."
+                )
+            },
+            {"role": "user", "content": user_text}
+        ]
+    )
 
-    tg.add_handler(CommandHandler("start", start))
-    tg.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+    await update.message.reply_text(response.choices[0].message.content)
 
-    await tg.initialize()
-    await tg.start()
-    await tg.updater.start_polling()
-    await tg.updater.idle()
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())
-    app.run(host="0.0.0.0", port=10000)
+print("🤖 Asghar is online on Render...")
+app.run_polling()
